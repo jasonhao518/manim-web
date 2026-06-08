@@ -65,6 +65,7 @@
     ]
   },
   "dependencies": {
+    "@mathjax/mathjax-newcm-font": "4.1.2",
     "@mathjax/src": "^4.1.1",
     "earcut": "^3.0.2",
     "gif.js": "^0.2.0",
