@@ -260,13 +260,38 @@ export abstract class Mobject {
     if (Array.isArray(target)) {
       targetPos = target;
     } else {
+      if (typeof (target as { getCenter?: unknown }).getCenter !== 'function') {
+        logger.warn('Mobject.moveTo: target missing getCenter(); skipping move.', {
+          thisId: this.id,
+          targetType:
+            (target as { constructor?: { name?: string } }).constructor?.name ?? typeof target,
+        });
+        return this;
+      }
       targetPos = target.getCenter();
     }
 
     // 3. Handle edge alignment (same delta math, world space)
     if (alignedEdge) {
       // A raw point has no extent, so its edge is the point itself.
-      const targetEdge = Array.isArray(target) ? target : target._getEdgeInDirection(alignedEdge);
+      let targetEdge: Vector3Tuple;
+      if (Array.isArray(target)) {
+        targetEdge = target;
+      } else if (
+        typeof (target as { _getEdgeInDirection?: unknown })._getEdgeInDirection === 'function'
+      ) {
+        targetEdge = target._getEdgeInDirection(alignedEdge);
+      } else {
+        logger.warn(
+          'Mobject.moveTo: target missing _getEdgeInDirection(); using center fallback.',
+          {
+            thisId: this.id,
+            targetType:
+              (target as { constructor?: { name?: string } }).constructor?.name ?? typeof target,
+          },
+        );
+        targetEdge = targetPos;
+      }
       const thisEdge = this._getEdgeInDirection(alignedEdge);
       targetPos = [
         targetEdge[0] - thisEdge[0] + currentCenter[0],
@@ -696,9 +721,25 @@ export abstract class Mobject {
     direction: Vector3Tuple = RIGHT,
     buff: number = 0.25,
   ): this {
-    const tPt = Array.isArray(target) ? target : target.getCenter();
+    let tPt: Vector3Tuple;
+    if (Array.isArray(target)) {
+      tPt = target;
+    } else if (typeof (target as { getCenter?: unknown }).getCenter === 'function') {
+      tPt = target.getCenter();
+    } else {
+      logger.warn('Mobject.nextTo: target missing getCenter(); skipping nextTo.', {
+        thisId: this.id,
+        targetType:
+          (target as { constructor?: { name?: string } }).constructor?.name ?? typeof target,
+      });
+      return this;
+    }
     const sEdge = this._getEdgeInDirection([-direction[0], -direction[1], -direction[2]]);
-    const tEdge = Array.isArray(target) ? tPt : target._getEdgeInDirection(direction);
+    const tEdge =
+      Array.isArray(target) ||
+      typeof (target as { _getEdgeInDirection?: unknown })._getEdgeInDirection !== 'function'
+        ? tPt
+        : target._getEdgeInDirection(direction);
     const len = Math.sqrt(direction[0] ** 2 + direction[1] ** 2 + direction[2] ** 2) || 1;
     const n: Vector3Tuple = [direction[0] / len, direction[1] / len, direction[2] / len];
     return this.shift([
@@ -720,7 +761,18 @@ export abstract class Mobject {
 
   moveToAligned(target: Mobject | Vector3Tuple, alignedEdge?: Vector3Tuple): this {
     if (alignedEdge) return this.alignTo(target, alignedEdge);
-    return this.moveTo(Array.isArray(target) ? target : target.getCenter());
+    if (Array.isArray(target)) {
+      return this.moveTo(target);
+    }
+    if (typeof (target as { getCenter?: unknown }).getCenter !== 'function') {
+      logger.warn('Mobject.moveToAligned: target missing getCenter(); skipping move.', {
+        thisId: this.id,
+        targetType:
+          (target as { constructor?: { name?: string } }).constructor?.name ?? typeof target,
+      });
+      return this;
+    }
+    return this.moveTo(target.getCenter());
   }
 
   /** @returns World-space edge position (center + half-bounding-box offset). */

@@ -73,6 +73,8 @@ export class VideoExporter {
   private _mediaRecorder: MediaRecorder | null = null;
   private _recordedChunks: Blob[] = [];
   private _isRecording: boolean = false;
+  private _combinedStream: MediaStream | null = null;
+  private _videoTrack: MediaStreamTrack | null = null;
 
   /**
    * Create a new VideoExporter.
@@ -140,30 +142,39 @@ export class VideoExporter {
       combinedStream = videoStream;
     }
 
-    // Determine codec based on format
-    let mimeType: string;
-    if (this._options.format === 'webm') {
-      mimeType = 'video/webm;codecs=vp9';
-    } else if (this._options.format === 'mov') {
-      if (MediaRecorder.isTypeSupported('video/quicktime')) {
-        mimeType = 'video/quicktime';
-      } else {
-        console.warn('MOV format not supported by this browser, falling back to WebM');
-        mimeType = 'video/webm;codecs=vp9';
-      }
-    } else {
-      mimeType = 'video/mp4'; // Note: MP4 support varies by browser
-    }
+    this._combinedStream = combinedStream;
+    this._videoTrack = combinedStream.getVideoTracks()[0] ?? null;
 
-    if (!MediaRecorder.isTypeSupported(mimeType)) {
-      throw new Error(`Format ${mimeType} is not supported by this browser`);
-    }
+    // Determine codec based on format and runtime support.
+    const mimeCandidates =
+      this._options.format === 'webm'
+        ? ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']
+        : this._options.format === 'mov'
+          ? ['video/quicktime', 'video/mp4', 'video/webm;codecs=vp8', 'video/webm']
+          : ['video/mp4;codecs=h264', 'video/mp4', 'video/webm;codecs=vp8', 'video/webm'];
+    const mimeType = mimeCandidates.find((candidate) => MediaRecorder.isTypeSupported(candidate));
 
     this._recordedChunks = [];
-    this._mediaRecorder = new MediaRecorder(combinedStream, {
-      mimeType,
-      videoBitsPerSecond: Math.floor(this._options.quality * 10_000_000),
-    });
+
+    try {
+      if (mimeType) {
+        this._mediaRecorder = new MediaRecorder(combinedStream, {
+          mimeType,
+          videoBitsPerSecond: Math.floor(this._options.quality * 10_000_000),
+        });
+      } else {
+        this._mediaRecorder = new MediaRecorder(combinedStream, {
+          videoBitsPerSecond: Math.floor(this._options.quality * 10_000_000),
+        });
+      }
+    } catch (err) {
+      // Safari and some Chromium builds can reject explicit mimeType; fallback to default.
+      console.warn(
+        'MediaRecorder init with explicit codec failed, retrying with browser defaults:',
+        err,
+      );
+      this._mediaRecorder = new MediaRecorder(combinedStream);
+    }
 
     this._mediaRecorder.ondataavailable = (event) => {
       if (event.data.size > 0) {
@@ -171,7 +182,7 @@ export class VideoExporter {
       }
     };
 
-    this._mediaRecorder.start();
+    this._mediaRecorder.start(1000);
     this._isRecording = true;
   }
 
@@ -198,9 +209,29 @@ export class VideoExporter {
         }
         const blob = new Blob(this._recordedChunks, { type: mimeType });
         this._isRecording = false;
+
+        if (this._combinedStream) {
+          for (const track of this._combinedStream.getTracks()) {
+            track.stop();
+          }
+        }
+        this._combinedStream = null;
+        this._videoTrack = null;
+
+        if (blob.size === 0) {
+          reject(new Error('Export failed: no media chunks were produced by MediaRecorder.'));
+          return;
+        }
+
         resolve(blob);
       };
 
+      if (
+        typeof this._mediaRecorder.requestData === 'function' &&
+        this._mediaRecorder.state === 'recording'
+      ) {
+        this._mediaRecorder.requestData();
+      }
       this._mediaRecorder.stop();
     });
   }
@@ -246,8 +277,27 @@ export class VideoExporter {
       // with the browser's paint cycle.
       await new Promise((r) => requestAnimationFrame(r));
 
+      const maybeRequestFrame = this._videoTrack as MediaStreamTrack & {
+        requestFrame?: () => void;
+      };
+      if (typeof maybeRequestFrame.requestFrame === 'function') {
+        maybeRequestFrame.requestFrame();
+      }
+
+      if (
+        this._mediaRecorder &&
+        this._mediaRecorder.state === 'recording' &&
+        typeof this._mediaRecorder.requestData === 'function' &&
+        frame > 0 &&
+        frame % Math.max(1, Math.floor(this._options.fps / 2)) === 0
+      ) {
+        this._mediaRecorder.requestData();
+      }
+
       this._options.onProgress(frame / totalFrames);
     }
+
+    this._options.onProgress(1);
 
     // Stop audio if it was started
     if (audioManager && audioManager.isPlaying) {
