@@ -28,8 +28,30 @@ type ProbePayload = {
 
 const THIS_DIR = dirname(fileURLToPath(import.meta.url));
 const VENDOR_ROOT = resolve(THIS_DIR, '../..');
-const FIXTURE_SCENE_FILE = resolve(THIS_DIR, './fixtures/basic_scene.py');
-const FIXTURE_SCENE_CLASS = 'ParityBasicScene';
+
+type ParityCase = {
+  id: string;
+  sceneFile: string;
+  sceneClass: string;
+};
+
+const PARITY_CASES: ParityCase[] = [
+  {
+    id: 'basic-scene',
+    sceneFile: resolve(THIS_DIR, './fixtures/basic_scene.py'),
+    sceneClass: 'ParityBasicScene',
+  },
+  {
+    id: 'geometry-components',
+    sceneFile: resolve(THIS_DIR, './fixtures/geometry_components_scene.py'),
+    sceneClass: 'ParityGeometryComponentsScene',
+  },
+  {
+    id: 'grammar-patterns',
+    sceneFile: resolve(THIS_DIR, './fixtures/grammar_patterns_scene.py'),
+    sceneClass: 'ParityGrammarPatternsScene',
+  },
+];
 
 function findMatchingBrace(source: string, openBraceIndex: number): number {
   let depth = 0;
@@ -107,6 +129,15 @@ function asNumber(value: unknown): number | null {
 }
 
 function asXY(value: unknown): [number | null, number | null] {
+  if (value && typeof value === 'object') {
+    const rec = value as { toArray?: () => unknown; x?: unknown; y?: unknown };
+    if (typeof rec.toArray === 'function') {
+      return asXY(rec.toArray());
+    }
+    if (typeof rec.x !== 'undefined' && typeof rec.y !== 'undefined') {
+      return [asNumber(rec.x), asNumber(rec.y)];
+    }
+  }
   if (!Array.isArray(value) || value.length < 2) {
     return [null, null];
   }
@@ -161,7 +192,7 @@ function extractWebMetrics(mobj: unknown): MetricObject {
   };
 }
 
-function runPythonProbe(): ProbePayload {
+function runPythonProbe(sceneFile: string, sceneClass: string): ProbePayload {
   const pythonScript = [
     'import importlib.util, json, sys',
     'scene_file = sys.argv[1]',
@@ -218,14 +249,10 @@ function runPythonProbe(): ProbePayload {
     'print(json.dumps(payload))',
   ].join('\n');
 
-  const result = spawnSync(
-    'python3',
-    ['-c', pythonScript, FIXTURE_SCENE_FILE, FIXTURE_SCENE_CLASS],
-    {
-      cwd: VENDOR_ROOT,
-      encoding: 'utf8',
-    },
-  );
+  const result = spawnSync('python3', ['-c', pythonScript, sceneFile, sceneClass], {
+    cwd: VENDOR_ROOT,
+    encoding: 'utf8',
+  });
 
   if (result.status !== 0) {
     throw new Error(result.stderr || 'Python probe failed');
@@ -234,8 +261,8 @@ function runPythonProbe(): ProbePayload {
   return JSON.parse(result.stdout) as ProbePayload;
 }
 
-async function runManimWebProbe(): Promise<ProbePayload> {
-  const sourcePy = readFileSync(FIXTURE_SCENE_FILE, 'utf8');
+async function runManimWebProbe(sceneFile: string): Promise<ProbePayload> {
+  const sourcePy = readFileSync(sceneFile, 'utf8');
   const converted = execFileSync(process.execPath, ['tools/py2ts.cjs'], {
     cwd: VENDOR_ROOT,
     input: sourcePy,
@@ -274,56 +301,59 @@ function pythonManimAvailable(): boolean {
 const parityIt = pythonManimAvailable() ? it : it.skip;
 
 describe('Python-to-manim-web parity', () => {
-  parityIt('matches bounds, size, position, and style', async () => {
-    const py = runPythonProbe();
-    const web = await runManimWebProbe();
+  parityIt.each(PARITY_CASES)(
+    '$id: matches bounds, size, position, and style',
+    async (testCase) => {
+      const py = runPythonProbe(testCase.sceneFile, testCase.sceneClass);
+      const web = await runManimWebProbe(testCase.sceneFile);
 
-    expect(web.objects.length).toBe(py.objects.length);
+      expect(web.objects.length).toBe(py.objects.length);
 
-    for (let index = 0; index < py.objects.length; index += 1) {
-      const pyObj = py.objects[index];
-      const webObj = web.objects[index];
-      const label = `object[${index}]`;
+      for (let index = 0; index < py.objects.length; index += 1) {
+        const pyObj = py.objects[index];
+        const webObj = web.objects[index];
+        const label = `object[${index}]`;
 
-      expect(webObj.center[0]).toBeCloseTo(pyObj.center[0] ?? 0, 1);
-      expect(webObj.center[1]).toBeCloseTo(pyObj.center[1] ?? 0, 1);
+        expect(webObj.center[0]).toBeCloseTo(pyObj.center[0] ?? 0, 1);
+        expect(webObj.center[1]).toBeCloseTo(pyObj.center[1] ?? 0, 1);
 
-      expect(webObj.size[0]).toBeCloseTo(pyObj.size[0] ?? 0, 1);
-      expect(webObj.size[1]).toBeCloseTo(pyObj.size[1] ?? 0, 1);
+        expect(webObj.size[0]).toBeCloseTo(pyObj.size[0] ?? 0, 1);
+        expect(webObj.size[1]).toBeCloseTo(pyObj.size[1] ?? 0, 1);
 
-      expect(webObj.bounds.min[0], `${label} bounds.min.x`).toBeCloseTo(
-        pyObj.bounds.min[0] ?? 0,
-        1,
-      );
-      expect(webObj.bounds.min[1], `${label} bounds.min.y`).toBeCloseTo(
-        pyObj.bounds.min[1] ?? 0,
-        1,
-      );
-      expect(webObj.bounds.max[0], `${label} bounds.max.x`).toBeCloseTo(
-        pyObj.bounds.max[0] ?? 0,
-        1,
-      );
-      expect(webObj.bounds.max[1], `${label} bounds.max.y`).toBeCloseTo(
-        pyObj.bounds.max[1] ?? 0,
-        1,
-      );
+        expect(webObj.bounds.min[0], `${label} bounds.min.x`).toBeCloseTo(
+          pyObj.bounds.min[0] ?? 0,
+          1,
+        );
+        expect(webObj.bounds.min[1], `${label} bounds.min.y`).toBeCloseTo(
+          pyObj.bounds.min[1] ?? 0,
+          1,
+        );
+        expect(webObj.bounds.max[0], `${label} bounds.max.x`).toBeCloseTo(
+          pyObj.bounds.max[0] ?? 0,
+          1,
+        );
+        expect(webObj.bounds.max[1], `${label} bounds.max.y`).toBeCloseTo(
+          pyObj.bounds.max[1] ?? 0,
+          1,
+        );
 
-      expect(webObj.style.stroke_width, `${label} stroke_width`).toBeCloseTo(
-        pyObj.style.stroke_width ?? 0,
-        1,
-      );
-      expect(webObj.style.fill_opacity, `${label} fill_opacity`).toBeCloseTo(
-        pyObj.style.fill_opacity ?? 0,
-        1,
-      );
-      expect(webObj.style.stroke_opacity, `${label} stroke_opacity`).toBeCloseTo(
-        pyObj.style.stroke_opacity ?? 0,
-        1,
-      );
+        expect(webObj.style.stroke_width, `${label} stroke_width`).toBeCloseTo(
+          pyObj.style.stroke_width ?? 0,
+          1,
+        );
+        expect(webObj.style.fill_opacity, `${label} fill_opacity`).toBeCloseTo(
+          pyObj.style.fill_opacity ?? 0,
+          1,
+        );
+        expect(webObj.style.stroke_opacity, `${label} stroke_opacity`).toBeCloseTo(
+          pyObj.style.stroke_opacity ?? 0,
+          1,
+        );
 
-      expect(webObj.style.color, `${label} color`).toBe(pyObj.style.color);
-      expect(webObj.style.fill_color, `${label} fill_color`).toBe(pyObj.style.fill_color);
-      expect(webObj.style.stroke_color, `${label} stroke_color`).toBe(pyObj.style.stroke_color);
-    }
-  });
+        expect(webObj.style.color, `${label} color`).toBe(pyObj.style.color);
+        expect(webObj.style.fill_color, `${label} fill_color`).toBe(pyObj.style.fill_color);
+        expect(webObj.style.stroke_color, `${label} stroke_color`).toBe(pyObj.style.stroke_color);
+      }
+    },
+  );
 });
