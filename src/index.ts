@@ -26,6 +26,48 @@ export {
   type TexTemplateOptions,
 } from './utils/tex-templates';
 
+export const np = {
+  pi: Math.PI,
+  e: Math.E,
+  tau: Math.PI * 2,
+  sin: Math.sin,
+  cos: Math.cos,
+  tan: Math.tan,
+  arcsin: Math.asin,
+  arccos: Math.acos,
+  arctan: Math.atan,
+  sqrt: Math.sqrt,
+  abs: Math.abs,
+  exp: Math.exp,
+  floor: Math.floor,
+  ceil: Math.ceil,
+  round: Math.round,
+  max: Math.max,
+  min: Math.min,
+  pow: Math.pow,
+  power: Math.pow,
+  log: (value: number, base?: number) => {
+    if (typeof base === 'number' && Number.isFinite(base) && base > 0 && base !== 1) {
+      return Math.log(value) / Math.log(base);
+    }
+    return Math.log(value);
+  },
+  array: <T>(value: T) => value,
+  linspace: (start: number, end: number, count = 50) => {
+    const safeCount = Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 50;
+    if (safeCount === 1) {
+      return [start];
+    }
+    const step = (end - start) / (safeCount - 1);
+    return Array.from({ length: safeCount }, (_, index) => start + step * index);
+  },
+  deg2rad: (deg: number) => (deg * Math.PI) / 180,
+  rad2deg: (rad: number) => (rad * 180) / Math.PI,
+};
+
+export const numpy = np;
+export const math = np;
+
 // Core
 export {
   Mobject,
