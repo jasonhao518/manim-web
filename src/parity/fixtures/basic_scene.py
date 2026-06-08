@@ -9,7 +9,7 @@ class ParityBasicScene(Scene):
             fill_color=BLUE,
             fill_opacity=0.35,
             stroke_width=5,
-            stroke_opacity=0.9,
+            stroke_opacity=1.0,
         )
         circle.shift(LEFT * 2.5)
 
@@ -27,7 +27,7 @@ class ParityBasicScene(Scene):
         dot = Dot(
             point=[0.5, -1.5, 0],
             radius=0.08,
-            color=YELLOW,
+            color=GREEN,
             fill_opacity=1.0,
             stroke_width=2,
         )
@@ -37,7 +37,7 @@ class ParityBasicScene(Scene):
             end=[1.8, -0.8, 0],
             color=GREEN,
             stroke_width=4,
-            stroke_opacity=0.8,
+            stroke_opacity=1.0,
         )
 
         self.add(circle, rect, dot, segment)
