@@ -8,7 +8,7 @@ class ParityGrammarPatternsScene(Scene):
 
         connector = Line(left.get_center(), right.get_center(), color=WHITE, stroke_width=3)
 
-        guide = DashedLine(left.get_center() + DOWN * 1.0, right.get_center() + DOWN * 1.0, color=GRAY)
+        guide = DashedLine(start=[-3.0, 0.0, 0.0], end=[-0.5, 0.0, 0.0], color=GRAY)
 
         marker = Arrow(start=[0.5, 0.2, 0.0], end=[2.2, 1.0, 0.0], color=GREEN)
         marker.shift(DOWN * 0.2)
@@ -17,7 +17,8 @@ class ParityGrammarPatternsScene(Scene):
         frame.shift(UP * 0.15)
 
         title = Text("grammar", color=WHITE, font_size=28)
-        title.shift(LEFT * 1.75 + UP * 2.0)
+        title.shift(LEFT * 1.75)
+        title.shift(UP * 2.0)
 
         a = Dot(point=[0.0, -1.7, 0.0], color=PURPLE)
         b = Dot(point=[1.4, -1.1, 0.0], color=PURPLE)
