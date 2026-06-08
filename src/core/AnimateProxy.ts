@@ -99,6 +99,27 @@ export class AnimateProxy extends Animation {
     return this;
   }
 
+  setStroke(color?: string, width?: number, opacity?: number): this {
+    this._calls.push(['setStroke', [color, width, opacity]]);
+    return this;
+  }
+
+  set_color(color: string): this {
+    return this.setColor(color);
+  }
+
+  set_fill(color?: string, opacity?: number): this {
+    return this.setFill(color, opacity);
+  }
+
+  set_stroke(color?: string, width?: number, opacity?: number): this {
+    return this.setStroke(color, width, opacity);
+  }
+
+  set_opacity(opacity: number): this {
+    return this.setOpacity(opacity);
+  }
+
   setStyle(style: Partial<MobjectStyle>): this {
     this._calls.push(['setStyle', [style]]);
     return this;

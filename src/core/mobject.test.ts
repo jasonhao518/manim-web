@@ -271,6 +271,28 @@ describe('Mobject - extended coverage', () => {
     expect(vm.fillOpacity).toBe(0.6);
   });
 
+  it('setStroke sets color, width and opacity', () => {
+    const vm = new VMobject();
+    vm.setStroke('#aabbcc', 7, 0.4);
+    expect(vm.color).toBe('#aabbcc');
+    expect(vm.strokeWidth).toBe(7);
+    expect(vm.opacity).toBe(0.4);
+  });
+
+  it('python-style snake_case style methods map to camelCase', () => {
+    const vm = new VMobject();
+    vm.set_color('#112233');
+    vm.set_fill('#445566', 0.2);
+    vm.set_stroke('#778899', 5, 0.6);
+    vm.set_opacity(0.3);
+
+    expect(vm.color).toBe('#778899');
+    expect(vm.fillColor).toBe('#778899');
+    expect(vm.fillOpacity).toBe(0.2);
+    expect(vm.strokeWidth).toBe(5);
+    expect(vm.opacity).toBe(0.3);
+  });
+
   // fillColor setter no-op when same
   it('fillColor setter is no-op when unchanged', () => {
     const vm = new VMobject();

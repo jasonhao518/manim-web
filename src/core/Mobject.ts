@@ -245,6 +245,33 @@ export abstract class Mobject {
     return this;
   }
 
+  setStroke(color?: string, width?: number, opacity?: number): this {
+    if (color !== undefined) this.setColor(color);
+    if (width !== undefined) this.setStrokeWidth(width);
+    if (opacity !== undefined) this.setStrokeOpacity(opacity);
+    return this;
+  }
+
+  setOpacity(opacity: number): this {
+    return this.setStrokeOpacity(opacity);
+  }
+
+  set_color(color: string): this {
+    return this.setColor(color);
+  }
+
+  set_fill(color?: string, opacity?: number): this {
+    return this.setFill(color, opacity);
+  }
+
+  set_stroke(color?: string, width?: number, opacity?: number): this {
+    return this.setStroke(color, width, opacity);
+  }
+
+  set_opacity(opacity: number): this {
+    return this.setOpacity(opacity);
+  }
+
   get fillColor(): string | undefined {
     return this._style.fillColor;
   }
