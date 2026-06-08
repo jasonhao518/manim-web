@@ -72,6 +72,17 @@ export type UpdaterFunction = (mobject: Mobject, dt: number) => void;
 
 /** Base mathematical object class. All visible objects in manimweb inherit from this class. */
 export abstract class Mobject {
+  private static _summarizeValue(value: unknown): string {
+    if (value === null) return 'null';
+    if (typeof value === 'undefined') return 'undefined';
+    if (Array.isArray(value)) return `Array(len=${value.length})`;
+    if (typeof value === 'object') {
+      const ctorName = (value as { constructor?: { name?: string } }).constructor?.name;
+      return ctorName ? `object:${ctorName}` : 'object';
+    }
+    return `${typeof value}:${String(value)}`;
+  }
+
   readonly id: string;
   parent: Mobject | null = null;
   children: Mobject[] = [];
@@ -165,6 +176,13 @@ export abstract class Mobject {
     if (this._color !== color) {
       this.color = color;
       this._markDirty();
+    }
+    if (typeof (this as { setOpacity?: unknown }).setOpacity !== 'function') {
+      logger.warn('Mobject.setColor: chain hazard detected (setOpacity missing on receiver).', {
+        thisId: this.id,
+        receiverType: this.constructor?.name ?? typeof this,
+        color,
+      });
     }
     return this;
   }
@@ -265,6 +283,7 @@ export abstract class Mobject {
           thisId: this.id,
           targetType:
             (target as { constructor?: { name?: string } }).constructor?.name ?? typeof target,
+          targetSummary: Mobject._summarizeValue(target),
         });
         return this;
       }
@@ -288,6 +307,7 @@ export abstract class Mobject {
             thisId: this.id,
             targetType:
               (target as { constructor?: { name?: string } }).constructor?.name ?? typeof target,
+            targetSummary: Mobject._summarizeValue(target),
           },
         );
         targetEdge = targetPos;
@@ -580,6 +600,19 @@ export abstract class Mobject {
     clone.strokeWidth = this.strokeWidth;
     clone.fillOpacity = this.fillOpacity;
     clone._style = { ...this._style };
+
+    if (
+      typeof (clone as { setColor?: unknown }).setColor !== 'function' ||
+      typeof (clone as { setOpacity?: unknown }).setOpacity !== 'function'
+    ) {
+      logger.warn('Mobject.copy: clone is missing chainable style methods.', {
+        sourceId: this.id,
+        sourceType: this.constructor?.name ?? typeof this,
+        cloneType: clone.constructor?.name ?? typeof clone,
+        hasSetColor: typeof (clone as { setColor?: unknown }).setColor === 'function',
+        hasSetOpacity: typeof (clone as { setOpacity?: unknown }).setOpacity === 'function',
+      });
+    }
 
     if (copyChildren) {
       // Snapshot the source list: copying onto `clone` may mutate a shared
