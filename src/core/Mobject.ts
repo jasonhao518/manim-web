@@ -72,6 +72,28 @@ export type UpdaterFunction = (mobject: Mobject, dt: number) => void;
 
 /** Base mathematical object class. All visible objects in manimweb inherit from this class. */
 export abstract class Mobject {
+  private static _labelNextToLogCount = 0;
+  private static readonly _labelNextToLogLimit = 120;
+
+  private static _labelNameForLog(mobj: unknown): string {
+    if (!mobj || typeof mobj !== 'object') return '';
+    const rec = mobj as Record<string, unknown>;
+    const candidates = [
+      rec.text,
+      rec.latex,
+      rec.texString,
+      rec.sourceText,
+      rec.rawText,
+      rec.content,
+    ];
+    for (const value of candidates) {
+      if (typeof value === 'string' && value.trim().length > 0) {
+        return value.trim();
+      }
+    }
+    return '';
+  }
+
   private static _summarizeValue(value: unknown): string {
     if (value === null) return 'null';
     if (typeof value === 'undefined') return 'undefined';
@@ -754,11 +776,77 @@ export abstract class Mobject {
     direction: Vector3Tuple = RIGHT,
     buff: number = 0.25,
   ): this {
+    const toPointTuple = (value: unknown): Vector3Tuple | null => {
+      if (!value) return null;
+
+      if (Array.isArray(value)) {
+        if (value.length < 3) return null;
+        const x = Number(value[0]);
+        const y = Number(value[1]);
+        const z = Number(value[2]);
+        if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return null;
+        return [x, y, z];
+      }
+
+      if (typeof value === 'object') {
+        const rec = value as Record<string, unknown>;
+
+        const x = Number(rec.x);
+        const y = Number(rec.y);
+        const z = Number(rec.z);
+        if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) {
+          return [x, y, z];
+        }
+
+        const i0 = Number(rec[0]);
+        const i1 = Number(rec[1]);
+        const i2 = Number(rec[2]);
+        if (Number.isFinite(i0) && Number.isFinite(i1) && Number.isFinite(i2)) {
+          return [i0, i1, i2];
+        }
+
+        const iterator = (value as { [Symbol.iterator]?: () => Iterator<unknown> })[
+          Symbol.iterator
+        ];
+        if (typeof iterator === 'function') {
+          const arr = Array.from(value as Iterable<unknown>);
+          if (arr.length >= 3) {
+            const ix = Number(arr[0]);
+            const iy = Number(arr[1]);
+            const iz = Number(arr[2]);
+            if (Number.isFinite(ix) && Number.isFinite(iy) && Number.isFinite(iz)) {
+              return [ix, iy, iz];
+            }
+          }
+        }
+      }
+
+      return null;
+    };
+
+    const normalizeDirection = (value: Vector3Tuple): Vector3Tuple => {
+      const dx = Number(value[0]);
+      const dy = Number(value[1]);
+      const dz = Number(value[2]);
+      const sx = Number.isFinite(dx) ? dx : RIGHT[0];
+      const sy = Number.isFinite(dy) ? dy : RIGHT[1];
+      const sz = Number.isFinite(dz) ? dz : RIGHT[2];
+      return [sx, sy, sz];
+    };
+
+    const ctorName = this.constructor.name;
+    const safeDirection = normalizeDirection(direction);
+    const targetObj = target as {
+      getCenter?: () => Vector3Tuple;
+      _getEdgeInDirection?: (direction: Vector3Tuple) => Vector3Tuple;
+      constructor?: { name?: string };
+    };
     let tPt: Vector3Tuple;
-    if (Array.isArray(target)) {
-      tPt = target;
-    } else if (typeof (target as { getCenter?: unknown }).getCenter === 'function') {
-      tPt = target.getCenter();
+    const asPoint = toPointTuple(target);
+    if (asPoint) {
+      tPt = asPoint;
+    } else if (typeof targetObj.getCenter === 'function') {
+      tPt = targetObj.getCenter();
     } else {
       logger.warn('Mobject.nextTo: target missing getCenter(); skipping nextTo.', {
         thisId: this.id,
@@ -767,19 +855,63 @@ export abstract class Mobject {
       });
       return this;
     }
-    const sEdge = this._getEdgeInDirection([-direction[0], -direction[1], -direction[2]]);
+    const sEdge = this._getEdgeInDirection([
+      -safeDirection[0],
+      -safeDirection[1],
+      -safeDirection[2],
+    ]);
     const tEdge =
-      Array.isArray(target) ||
-      typeof (target as { _getEdgeInDirection?: unknown })._getEdgeInDirection !== 'function'
+      !!asPoint || typeof targetObj._getEdgeInDirection !== 'function'
         ? tPt
-        : target._getEdgeInDirection(direction);
-    const len = Math.sqrt(direction[0] ** 2 + direction[1] ** 2 + direction[2] ** 2) || 1;
-    const n: Vector3Tuple = [direction[0] / len, direction[1] / len, direction[2] / len];
-    return this.shift([
+        : targetObj._getEdgeInDirection(safeDirection);
+    const len =
+      Math.sqrt(safeDirection[0] ** 2 + safeDirection[1] ** 2 + safeDirection[2] ** 2) || 1;
+    const n: Vector3Tuple = [
+      safeDirection[0] / len,
+      safeDirection[1] / len,
+      safeDirection[2] / len,
+    ];
+    const shiftBy: Vector3Tuple = [
       tEdge[0] + n[0] * buff - sEdge[0],
       tEdge[1] + n[1] * buff - sEdge[1],
       tEdge[2] + n[2] * buff - sEdge[2],
-    ]);
+    ];
+
+    const beforeCenter = this.getCenter();
+    const result = this.shift(shiftBy);
+
+    if (Mobject._labelNextToLogCount < Mobject._labelNextToLogLimit) {
+      Mobject._labelNextToLogCount += 1;
+      const afterCenter = this.getCenter();
+      const labelName = Mobject._labelNameForLog(this);
+      let targetCenter: Vector3Tuple | null = null;
+      if (Array.isArray(target)) {
+        targetCenter = target;
+      } else if (typeof targetObj.getCenter === 'function') {
+        try {
+          targetCenter = targetObj.getCenter();
+        } catch {
+          targetCenter = null;
+        }
+      }
+      logger.warn('[manim-web-label] nextTo', {
+        thisId: this.id,
+        ctorName,
+        labelName,
+        buff,
+        direction,
+        safeDirection,
+        normalizedDirection: n,
+        targetCenter,
+        sourceEdge: sEdge,
+        targetEdge: tEdge,
+        shiftBy,
+        beforeCenter,
+        afterCenter,
+      });
+    }
+
+    return result;
   }
 
   alignTo(target: Mobject | Vector3Tuple, direction: Vector3Tuple): this {
