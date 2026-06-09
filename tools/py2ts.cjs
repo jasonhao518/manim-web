@@ -339,7 +339,9 @@ const COLOR_MAP = {
   'MAROON_D': 'MAROON_D', 'MAROON_E': 'MAROON_E',
   'GRAY': 'GRAY', 'GRAY_A': 'GRAY_A', 'GRAY_B': 'GRAY_B', 'GRAY_C': 'GRAY_C',
   'GRAY_D': 'GRAY_D', 'GRAY_E': 'GRAY_E',
-  'GREY': 'GRAY', 'GREY_A': 'GRAY_A', 'GREY_B': 'GRAY_B',
+  'GREY': 'GRAY', 'GREY_A': 'GRAY_A', 'GREY_B': 'GRAY_B', 'GREY_C': 'GRAY_C',
+  'GREY_D': 'GRAY_D', 'GREY_E': 'GRAY_E',
+  'LIGHT_GREY': 'LIGHT_GRAY', 'DARK_GREY': 'DARK_GRAY',
   'LIGHT_GRAY': 'LIGHT_GRAY', 'DARK_GRAY': 'DARK_GRAY',
   'LIGHTER_GREY': 'LIGHTER_GRAY', 'DARKER_GREY': 'DARKER_GRAY',
 };
@@ -580,6 +582,7 @@ function convertPythonToTypeScript(pythonCode) {
     usedDirections: new Set(),
     usedRateFuncs: new Set(),
     usedUtilities: new Set(),
+    usedCompatHelpers: new Set(),
   };
 
   const convertedScenes = scenes.map(scene => {
@@ -616,6 +619,21 @@ function convertPythonToTypeScript(pythonCode) {
     output.push('import {');
     output.push(`  ${uniqueImports.join(',\n  ')}`);
     output.push("} from '../src/index.ts';");
+    output.push('');
+  }
+
+  if (tracking.usedCompatHelpers.has('safeGetCenter')) {
+    output.push('function __py2tsSafeGetCenter(target: any) {');
+    output.push('  try {');
+    output.push('    return target.getCenter();');
+    output.push('  } catch (error) {');
+    output.push('    const message = error instanceof Error ? error.message : String(error);');
+    output.push("    if (message.includes('cannot compute center of an empty group')) {");
+    output.push('      return [0, 0, 0];');
+    output.push('    }');
+    output.push('    throw error;');
+    output.push('  }');
+    output.push('}');
     output.push('');
   }
 
@@ -812,6 +830,20 @@ function convertLine(rawLine, tracking, varRenames, mathTexVars = new Set()) {
     return `scaleVec(${num}, ${dir})`;
   });
 
+  // Normalize common British spellings used in Python Manim snippets.
+  line = line.replace(/\bGREY_([A-E])\b/g, 'GRAY_$1');
+  line = line.replace(/\bLIGHT_GREY\b/g, 'LIGHT_GRAY');
+  line = line.replace(/\bDARK_GREY\b/g, 'DARK_GRAY');
+  line = line.replace(/\bLIGHTER_GREY\b/g, 'LIGHTER_GRAY');
+  line = line.replace(/\bDARKER_GREY\b/g, 'DARKER_GRAY');
+  line = line.replace(/\bGREY\b/g, 'GRAY');
+
+  // Rewrite direct getCenter() calls to a compatibility helper.
+  line = line.replace(/\b([A-Za-z_$][\w$.]*)\.getCenter\(\s*\)/g, (_, target) => {
+    tracking.usedCompatHelpers.add('safeGetCenter');
+    return `__py2tsSafeGetCenter(${target})`;
+  });
+
   // Track colors and directions
   for (const c of Object.keys(COLOR_MAP)) {
     if (new RegExp(`\\b${c}\\b`).test(line)) tracking.usedColors.add(c);
@@ -891,9 +923,6 @@ function convertLine(rawLine, tracking, varRenames, mathTexVars = new Set()) {
 
   // Method call kwargs → options object
   line = convertMethodCallArgs(line);
-
-  // GREY → GRAY
-  line = line.replace(/\bGREY\b/g, 'GRAY');
 
   // Python string methods
   line = line.replace(/\.upper\(\)/g, '.toUpperCase()');
