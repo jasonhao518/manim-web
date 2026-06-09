@@ -637,6 +637,15 @@ function convertPythonToTypeScript(pythonCode) {
     output.push('');
   }
 
+  if (tracking.usedCompatHelpers.has('safeLen')) {
+    output.push('function __py2tsSafeLen(value: any) {');
+    output.push('  if (value == null) return 0;');
+    output.push('  const len = value.length;');
+    output.push('  return typeof len === "number" && Number.isFinite(len) ? len : 0;');
+    output.push('}');
+    output.push('');
+  }
+
   for (const scene of convertedScenes) {
     output.push(`export async function ${scene.funcName}(scene: Scene) {`);
     let lastBlank = false;
@@ -838,12 +847,6 @@ function convertLine(rawLine, tracking, varRenames, mathTexVars = new Set()) {
   line = line.replace(/\bDARKER_GREY\b/g, 'DARKER_GRAY');
   line = line.replace(/\bGREY\b/g, 'GRAY');
 
-  // Rewrite direct getCenter() calls to a compatibility helper.
-  line = line.replace(/\b([A-Za-z_$][\w$.]*)\.getCenter\(\s*\)/g, (_, target) => {
-    tracking.usedCompatHelpers.add('safeGetCenter');
-    return `__py2tsSafeGetCenter(${target})`;
-  });
-
   // Track colors and directions
   for (const c of Object.keys(COLOR_MAP)) {
     if (new RegExp(`\\b${c}\\b`).test(line)) tracking.usedColors.add(c);
@@ -924,11 +927,20 @@ function convertLine(rawLine, tracking, varRenames, mathTexVars = new Set()) {
   // Method call kwargs → options object
   line = convertMethodCallArgs(line);
 
+  // Rewrite direct getCenter() calls to a compatibility helper.
+  line = line.replace(/\b([A-Za-z_$][\w$.]*)\.getCenter\(\s*\)/g, (_, target) => {
+    tracking.usedCompatHelpers.add('safeGetCenter');
+    return `__py2tsSafeGetCenter(${target})`;
+  });
+
   // Python string methods
   line = line.replace(/\.upper\(\)/g, '.toUpperCase()');
   line = line.replace(/\.lower\(\)/g, '.toLowerCase()');
   line = line.replace(/\.strip\(\)/g, '.trim()');
-  line = line.replace(/\blen\((\w+)\)/g, '$1.length');
+  line = line.replace(/\blen\((\w+)\)/g, (_, target) => {
+    tracking.usedCompatHelpers.add('safeLen');
+    return `__py2tsSafeLen(${target})`;
+  });
 
   // Control flow: trailing colon → { (only for control flow keywords)
   if (/^\s*(if|elif|else|for|while|try|except|finally|with)\b/.test(rawLine)) {
