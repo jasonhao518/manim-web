@@ -127,12 +127,29 @@ export class MathTex extends VGroup {
    */
   getPart(index: number): VGroup {
     if (!this._isMultiPart) {
+      if (index === 0) {
+        // Compatibility: some transpiled scenes index single-part MathTex as tex[0].
+        // Return self so chained calls remain functional.
+        return this as unknown as VGroup;
+      }
       throw new Error('getPart() is only available on multi-part MathTex (created with string[])');
     }
     if (index < 0 || index >= this._parts.length) {
       throw new Error(`Part index ${index} out of range [0, ${this._parts.length - 1}]`);
     }
     return this._parts[index];
+  }
+
+  /**
+   * Compatibility helper for transpiled slicing expressions like tex[0][2:7].
+   * For single-part MathTex, this returns self to preserve fluent chains.
+   */
+  slice(start: number, end?: number): VGroup {
+    if (!this._isMultiPart) {
+      return this as unknown as VGroup;
+    }
+    const children = this._parts.slice(start, end);
+    return new VGroup(...children);
   }
 
   /**

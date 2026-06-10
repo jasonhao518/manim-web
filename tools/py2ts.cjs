@@ -797,9 +797,16 @@ function convertLine(rawLine, tracking, varRenames, mathTexVars = new Set()) {
   line = line.replace(/range\((\d+),\s*(\d+)\)/g,
     'Array.from({length: $2 - $1}, (_, i) => i + $1)');
 
+  // List comprehension with list-literal iterable: [expr for x in [a, b, c]]
+  // Handle this first so nested brackets don't get partially matched.
+  line = line.replace(
+    /\[\s*(.+?)\s+for\s+(\w+)\s+in\s+\[([^\]]+)\]\s*\]/g,
+    '[$3].map(($2) => $1)'
+  );
+
   // List comprehension: [expr for x in iterable]
   line = line.replace(
-    /\[\s*(.+?)\s+for\s+(\w+)\s+in\s+(.+?)\s*\]/g,
+    /\[\s*(.+?)\s+for\s+(\w+)\s+in\s+([A-Za-z_$][\w$.()]+)\s*\]/g,
     '$3.map(($2) => $1)'
   );
 
@@ -846,6 +853,19 @@ function convertLine(rawLine, tracking, varRenames, mathTexVars = new Set()) {
     tracking.usedDirections.add(dir);
     tracking.usedUtilities.add('scaleVec');
     return `scaleVec(${num}, ${dir})`;
+  });
+
+  // Vector additions commonly used in Manim snippets.
+  // point + [dx, dy, dz] -> addVec(point, [dx, dy, dz])
+  // point + scaleVec(...) -> addVec(point, scaleVec(...))
+  line = line.replace(/\b([A-Za-z_$][\w$]*)\s*\+\s*(\[[^\]]+\]|scaleVec\([^)]*\))/g, (_, lhs, rhs) => {
+    tracking.usedUtilities.add('addVec');
+    return `addVec(${lhs}, ${rhs})`;
+  });
+  // Support chained additions after first rewrite: addVec(...) + scaleVec(...)
+  line = line.replace(/(addVec\([^)]*\))\s*\+\s*(\[[^\]]+\]|scaleVec\([^)]*\))/g, (_, lhs, rhs) => {
+    tracking.usedUtilities.add('addVec');
+    return `addVec(${lhs}, ${rhs})`;
   });
 
   // Normalize common British spellings used in Python Manim snippets.
@@ -936,10 +956,10 @@ function convertLine(rawLine, tracking, varRenames, mathTexVars = new Set()) {
   // Method call kwargs → options object
   line = convertMethodCallArgs(line);
 
-  // Rewrite direct getCenter() calls to a compatibility helper.
+  // Rewrite direct getCenter() calls to an inline safe expression so the
+  // generated construct body can run standalone without top-level helpers.
   line = line.replace(/\b([A-Za-z_$][\w$.]*)\.getCenter\(\s*\)/g, (_, target) => {
-    tracking.usedCompatHelpers.add('safeGetCenter');
-    return `__py2tsSafeGetCenter(${target})`;
+    return `((${target}) && typeof (${target}).getCenter === 'function' ? (() => { try { return (${target}).getCenter(); } catch (_error) { return [0, 0, 0]; } })() : [0, 0, 0])`;
   });
 
   // Python string methods
@@ -994,7 +1014,7 @@ function convertLine(rawLine, tracking, varRenames, mathTexVars = new Set()) {
   }
 
   // Tuple/list unpack assignment: a, b, c = expr  -> const [a, b, c] = expr
-  const unpackMatch = line.match(/^(\s*)([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w+)+)\s*=\s*(.+);?$/);
+  const unpackMatch = line.match(/^(\s*)([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)+)\s*=\s*(.+);?$/);
   if (unpackMatch && !/^\s*(const|let|var)\b/.test(line)) {
     const indent = unpackMatch[1];
     const vars = unpackMatch[2]
@@ -1002,7 +1022,9 @@ function convertLine(rawLine, tracking, varRenames, mathTexVars = new Set()) {
       .map((v) => v.trim())
       .filter(Boolean)
       .join(', ');
-    const rhs = unpackMatch[3].trim().replace(/;$/, '');
+    let rhs = unpackMatch[3].trim().replace(/;$/, '');
+    // map(fn, iterable) that may still remain in RHS (e.g., due nested rewrites)
+    rhs = rhs.replace(/\bmap\(\s*([^,]+?)\s*,\s*([^\)]+?)\s*\)/g, '($2).map($1)');
     line = `${indent}const [${vars}] = ${rhs};`;
   }
 

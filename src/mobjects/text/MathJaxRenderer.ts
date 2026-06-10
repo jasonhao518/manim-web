@@ -364,6 +364,8 @@ export async function renderLatexToSVG(
       // Headless / no-DOM environment — create a minimal stub SVGElement
       svgElement = {
         tagName: 'svg',
+        children: [],
+        childNodes: [],
         getAttribute: () => null,
         setAttribute: () => {},
         querySelectorAll: () => [],
@@ -378,6 +380,8 @@ export async function renderLatexToSVG(
         // Create a fallback stub
         svgElement = {
           tagName: 'svg',
+          children: [],
+          childNodes: [],
           getAttribute: () => null,
           setAttribute: () => {},
           querySelectorAll: () => [],
@@ -421,6 +425,8 @@ export async function renderLatexToSVG(
   if (!('tagName' in svgElement)) {
     svgElement = {
       tagName: 'svg',
+      children: [],
+      childNodes: [],
       getAttribute: () => null,
       setAttribute: () => {},
       querySelectorAll: () => [],
