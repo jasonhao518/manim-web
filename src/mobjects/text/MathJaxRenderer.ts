@@ -356,7 +356,18 @@ export async function renderLatexToSVG(
     const svg = new SVG({ fontCache: 'none' });
     const html = MathJax.document('', { InputJax: tex, OutputJax: svg });
 
-    const node = html.convert(texString, { display: displayMode });
+    let node: unknown;
+    try {
+      node = html.convert(texString, { display: displayMode });
+    } catch (error) {
+      // MathJax may throw a retry sentinel with an attached promise; attach a
+      // catch handler so Node doesn't surface an unhandled rejection.
+      const retry = (error as { retry?: Promise<unknown> } | null | undefined)?.retry;
+      if (retry && typeof retry.catch === 'function') {
+        retry.catch(() => {});
+      }
+      throw error;
+    }
     svgString = adaptor.outerHTML(node as LiteElement);
 
     // Parse the string into a real SVGElement for downstream use

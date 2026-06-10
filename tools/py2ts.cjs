@@ -854,11 +854,28 @@ function convertLine(rawLine, tracking, varRenames, mathTexVars = new Set()) {
     tracking.usedUtilities.add('scaleVec');
     return `scaleVec(${num}, ${dir})`;
   });
+  // DIRECTION * variable/expression-token
+  line = line.replace(new RegExp(`${dirRe}\\s*\\*\\s*([A-Za-z_$][\\w$.]*)`, 'g'), (_, dir, scalar) => {
+    tracking.usedDirections.add(dir);
+    tracking.usedUtilities.add('scaleVec');
+    return `scaleVec(${scalar}, ${dir})`;
+  });
+  // variable/expression-token * DIRECTION
+  line = line.replace(new RegExp(`([A-Za-z_$][\\w$.]*)\\s*\\*\\s*${dirRe}`, 'g'), (_, scalar, dir) => {
+    tracking.usedDirections.add(dir);
+    tracking.usedUtilities.add('scaleVec');
+    return `scaleVec(${scalar}, ${dir})`;
+  });
 
   // Vector additions commonly used in Manim snippets.
   // point + [dx, dy, dz] -> addVec(point, [dx, dy, dz])
   // point + scaleVec(...) -> addVec(point, scaleVec(...))
   line = line.replace(/\b([A-Za-z_$][\w$]*)\s*\+\s*(\[[^\]]+\]|scaleVec\([^)]*\))/g, (_, lhs, rhs) => {
+    tracking.usedUtilities.add('addVec');
+    return `addVec(${lhs}, ${rhs})`;
+  });
+  // scaleVec(...) + scaleVec(...)
+  line = line.replace(/(scaleVec\([^)]*\))\s*\+\s*(scaleVec\([^)]*\))/g, (_, lhs, rhs) => {
     tracking.usedUtilities.add('addVec');
     return `addVec(${lhs}, ${rhs})`;
   });
@@ -1028,17 +1045,21 @@ function convertLine(rawLine, tracking, varRenames, mathTexVars = new Set()) {
     line = `${indent}const [${vars}] = ${rhs};`;
   }
 
-  // Convert MathTex variable indexing: text[N] → text.getPart(N)
-  for (const mtVar of mathTexVars) {
-    line = line.replace(new RegExp(`\\b${mtVar}\\[\\s*(\\d+)\\s*\\]`, 'g'), `${mtVar}.getPart($1)`);
-  }
-
   // Rename snake_case variable references to camelCase
   for (const [original, camel] of varRenames) {
     if (original !== camel) {
       line = line.replace(new RegExp(`\\b${original}\\b`, 'g'), camel);
     }
   }
+
+  // Convert MathTex variable indexing after renames: text[N] → text.getPart(N)
+  for (const mtVar of mathTexVars) {
+    line = line.replace(new RegExp(`\\b${mtVar}\\[\\s*(\\d+)\\s*\\]`, 'g'), `${mtVar}.getPart($1)`);
+  }
+
+  // scene.play in ManimWeb accepts only animations; drop trailing timing options
+  // emitted from Python kwargs conversion to avoid passing plain objects as animations.
+  line = line.replace(/await\s+scene\.play\((.+),\s*\{\s*duration\s*:\s*[^}]+\}\s*\);?$/g, 'await scene.play($1);');
 
   // Semicolons
   if (shouldAddSemicolon(line)) {
@@ -1113,6 +1134,14 @@ function convertConstructorArgs(line) {
         newArgs = `${positional[0]}, { ${opts.map(o => o.key ? `${o.key}: ${o.val}` : o.val).join(', ')} }`;
       } else if (positional.length === 1 && kwargs.length > 0) {
         newArgs = `${positional[0]}, { ${kwargs.join(', ')} }`;
+      } else {
+        continue;
+      }
+    } else if (className === 'RightAngle') {
+      // RightAngle(line1, line2, ...) → RightAngle({ line1, line2 }, { ... })
+      if (positional.length >= 2) {
+        const optObj = kwargs.length > 0 ? `{ ${kwargs.join(', ')} }` : '{}';
+        newArgs = `{ line1: ${positional[0]}, line2: ${positional[1]} }, ${optObj}`;
       } else {
         continue;
       }

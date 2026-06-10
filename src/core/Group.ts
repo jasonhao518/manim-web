@@ -250,6 +250,14 @@ export class Group extends Mobject {
   }
 
   /**
+   * Python-style slicing helper for transpiled expressions like group[0][2:7].
+   */
+  slice(start: number, end?: number): Group {
+    const sliced = this.children.slice(start, end).map((m) => m.copy());
+    return new Group(...sliced);
+  }
+
+  /**
    * Filter mobjects in the group.
    * @param fn - Filter predicate
    * @returns New Group with filtered mobjects
