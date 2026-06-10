@@ -13,6 +13,24 @@ import { VMobject, Point } from './VMobject';
  */
 export class VGroup extends VMobject {
   /**
+   * Python-Manim compatibility: access a child by index.
+   */
+  getPart(index: number): Mobject | undefined {
+    const i = Math.trunc(index);
+    if (i < 0) {
+      return this.children[this.children.length + i];
+    }
+    return this.children[i];
+  }
+
+  /**
+   * Python-Manim compatibility: return a sliced child group.
+   */
+  slice(start?: number, end?: number): VGroup {
+    return new VGroup(...this.children.slice(start, end));
+  }
+
+  /**
    * True when this VGroup (recursively) has no renderable geometry.
    */
   override isEmpty(): boolean {

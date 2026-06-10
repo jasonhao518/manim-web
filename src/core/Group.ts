@@ -224,6 +224,18 @@ export class Group extends Mobject {
   }
 
   /**
+   * Compatibility alias used by transpiled scripts that treat groups
+   * similarly to MathTex parts.
+   */
+  getPart(index: number): Mobject {
+    const child = this.children[index];
+    if (!child) {
+      throw new Error(`Part index ${index} out of range [0, ${this.children.length - 1}]`);
+    }
+    return child;
+  }
+
+  /**
    * Iterate over all mobjects in the group.
    */
   [Symbol.iterator](): Iterator<Mobject> {

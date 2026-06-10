@@ -867,6 +867,28 @@ function convertLine(rawLine, tracking, varRenames, mathTexVars = new Set()) {
     return `scaleVec(${scalar}, ${dir})`;
   });
 
+  // Generic scalar * vector-expression patterns frequently used in geometry scripts.
+  // e.g. k * [x, y, z], k * subVec(A, B)
+  line = line.replace(/([A-Za-z_$][\w$.]*|\d+(?:\.\d+)?)\s*\*\s*(\[[^\]]+\]|subVec\([^)]*\)|addVec\([^)]*\))/g, (_, scalar, vecExpr) => {
+    tracking.usedUtilities.add('scaleVec');
+    return `scaleVec(${scalar}, ${vecExpr})`;
+  });
+  line = line.replace(/(\[[^\]]+\]|subVec\([^)]*\)|addVec\([^)]*\))\s*\*\s*([A-Za-z_$][\w$.]*|\d+(?:\.\d+)?)/g, (_, vecExpr, scalar) => {
+    tracking.usedUtilities.add('scaleVec');
+    return `scaleVec(${scalar}, ${vecExpr})`;
+  });
+
+  // Heuristic point-vector subtraction/addition for common point names (A, B, A0, P1...).
+  const pointLike = '([A-Z][A-Za-z0-9_]*|[A-Za-z_][\\w$]*0)';
+  line = line.replace(new RegExp(`\\b${pointLike}\\s*-\\s*${pointLike}\\b`, 'g'), (_, lhs, rhs) => {
+    tracking.usedUtilities.add('subVec');
+    return `subVec(${lhs}, ${rhs})`;
+  });
+  line = line.replace(new RegExp(`\\b${pointLike}\\s*\\+\\s*${pointLike}\\b`, 'g'), (_, lhs, rhs) => {
+    tracking.usedUtilities.add('addVec');
+    return `addVec(${lhs}, ${rhs})`;
+  });
+
   // Vector additions commonly used in Manim snippets.
   // point + [dx, dy, dz] -> addVec(point, [dx, dy, dz])
   // point + scaleVec(...) -> addVec(point, scaleVec(...))
@@ -881,6 +903,11 @@ function convertLine(rawLine, tracking, varRenames, mathTexVars = new Set()) {
   });
   // Support chained additions after first rewrite: addVec(...) + scaleVec(...)
   line = line.replace(/(addVec\([^)]*\))\s*\+\s*(\[[^\]]+\]|scaleVec\([^)]*\))/g, (_, lhs, rhs) => {
+    tracking.usedUtilities.add('addVec');
+    return `addVec(${lhs}, ${rhs})`;
+  });
+  // addVec(...) + scaleVec(...) where addVec has nested parens in args
+  line = line.replace(/(addVec\([^\n]+?\))\s*\+\s*(scaleVec\([^)]*\))/g, (_, lhs, rhs) => {
     tracking.usedUtilities.add('addVec');
     return `addVec(${lhs}, ${rhs})`;
   });
@@ -1042,6 +1069,8 @@ function convertLine(rawLine, tracking, varRenames, mathTexVars = new Set()) {
     let rhs = unpackMatch[3].trim().replace(/;$/, '');
     // map(fn, iterable) that may still remain in RHS (e.g., due nested rewrites)
     rhs = rhs.replace(/\bmap\(\s*([^,]+?)\s*,\s*([^\)]+?)\s*\)/g, '($2).map($1)');
+    // Guard against accidental double-wrapped list literals in map conversion.
+    rhs = rhs.replace(/^\s*\[\[([\s\S]+)\]\]\.map\(/, '[$1].map(');
     line = `${indent}const [${vars}] = ${rhs};`;
   }
 
@@ -1137,7 +1166,7 @@ function convertConstructorArgs(line) {
       } else {
         continue;
       }
-    } else if (className === 'RightAngle') {
+    } else if (className === 'RightAngle' || className === 'Angle') {
       // RightAngle(line1, line2, ...) → RightAngle({ line1, line2 }, { ... })
       if (positional.length >= 2) {
         const optObj = kwargs.length > 0 ? `{ ${kwargs.join(', ')} }` : '{}';
