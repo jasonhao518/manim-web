@@ -45,8 +45,33 @@ export class Polygon extends VMobject {
   private _vertices: Vector3Tuple[];
   private _closed: boolean;
 
-  constructor(options: PolygonOptions) {
+  constructor(options: PolygonOptions);
+  constructor(...args: unknown[]);
+  constructor(...args: unknown[]) {
     super();
+
+    const isVec3 = (v: unknown): v is Vector3Tuple =>
+      Array.isArray(v) && v.length >= 2 && typeof v[0] === 'number' && typeof v[1] === 'number';
+
+    const first = args[0] as PolygonOptions | Vector3Tuple | undefined;
+    const firstIsOptions =
+      !!first && !Array.isArray(first) && typeof first === 'object' && 'vertices' in first;
+
+    let options: PolygonOptions;
+    if (firstIsOptions) {
+      options = first as PolygonOptions;
+    } else {
+      let trailingOptions: Partial<PolygonOptions> = {};
+      if (args.length > 0) {
+        const maybeLast = args[args.length - 1];
+        if (maybeLast && !Array.isArray(maybeLast) && typeof maybeLast === 'object') {
+          trailingOptions = maybeLast as Partial<PolygonOptions>;
+          args = args.slice(0, -1);
+        }
+      }
+      const vertices = args.filter((v) => isVec3(v)) as Vector3Tuple[];
+      options = { ...(trailingOptions as PolygonOptions), vertices };
+    }
 
     const {
       vertices,

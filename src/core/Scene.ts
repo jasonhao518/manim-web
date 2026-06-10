@@ -577,7 +577,8 @@ export class Scene {
       // starting animations. Without this, Create/DrawBorderThenFill would
       // animate an empty mobject because SVG paths haven't loaded yet.
       const renderPromises: Promise<void>[] = [];
-      const collectRenders = (mobject: Mobject) => {
+      const collectRenders = (mobject: Mobject | undefined) => {
+        if (!mobject) return;
         const asyncMob = mobject as Mobject & { waitForRender?: () => Promise<void> };
         if (typeof asyncMob.waitForRender === 'function') {
           renderPromises.push(asyncMob.waitForRender().catch(() => {}));
@@ -587,7 +588,7 @@ export class Scene {
         }
       };
       for (const anim of allAnimations) {
-        collectRenders(anim.mobject);
+        collectRenders(anim?.mobject);
       }
       if (renderPromises.length > 0) {
         await Promise.all(renderPromises);
