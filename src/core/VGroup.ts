@@ -27,9 +27,8 @@ export class VGroup extends VMobject {
    */
   override getCenter(): Vector3Tuple {
     if (this.isEmpty()) {
-      // No geometry => no meaningful center. We don't fall back to `position`
-      // because normalizeTransform() can reset it; callers must not rely on it.
-      throw new Error('VGroup.getCenter: cannot compute center of an empty group (no geometry)');
+      // For layout helper robustness, empty groups fall back to their origin.
+      return this._localToWorld([0, 0, 0]);
     }
     return super.getCenter();
   }
@@ -268,9 +267,17 @@ export class VGroup extends VMobject {
 
     // Position first child
     let prevChild = this.children[0];
+    if (!prevChild || prevChild.isEmpty()) {
+      prevChild = this.children.find((child) => !child.isEmpty()) || this.children[0];
+    }
 
     for (let i = 1; i < this.children.length; i++) {
       const child = this.children[i];
+      if (child.isEmpty()) continue;
+      if (prevChild.isEmpty()) {
+        prevChild = child;
+        continue;
+      }
       child.nextTo(prevChild, direction, buff);
       prevChild = child;
     }

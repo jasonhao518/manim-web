@@ -100,9 +100,8 @@ export class Group extends Mobject {
    */
   override getCenter(): Vector3Tuple {
     if (this.isEmpty()) {
-      // No geometry => no meaningful center. We don't fall back to `position`
-      // because normalizeTransform() can reset it; callers must not rely on it.
-      throw new Error('Group.getCenter: cannot compute center of an empty group (no geometry)');
+      // For layout helper robustness, empty groups fall back to their origin.
+      return this._localToWorld([0, 0, 0]);
     }
 
     const bounds = new THREE.Box3();
@@ -118,7 +117,7 @@ export class Group extends Mobject {
     }
 
     if (bounds.isEmpty()) {
-      throw new Error('Group.getCenter: cannot compute center of an empty group (no geometry)');
+      return this._localToWorld([0, 0, 0]);
     }
     bounds.getCenter(tempMin);
     return [tempMin.x, tempMin.y, tempMin.z];

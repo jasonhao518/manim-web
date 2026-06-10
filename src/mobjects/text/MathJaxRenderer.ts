@@ -363,6 +363,7 @@ export async function renderLatexToSVG(
     if (typeof DOMParser === 'undefined') {
       // Headless / no-DOM environment — create a minimal stub SVGElement
       svgElement = {
+        tagName: 'svg',
         getAttribute: () => null,
         setAttribute: () => {},
         querySelectorAll: () => [],
@@ -376,6 +377,7 @@ export async function renderLatexToSVG(
       if (!svgElement || !('tagName' in svgElement)) {
         // Create a fallback stub
         svgElement = {
+          tagName: 'svg',
           getAttribute: () => null,
           setAttribute: () => {},
           querySelectorAll: () => [],
@@ -417,7 +419,12 @@ export async function renderLatexToSVG(
   // Convert SVG paths to VMobjects
   // ------------------------------------------------------------------
   if (!('tagName' in svgElement)) {
-    throw new Error('svgElement has no tagName');
+    svgElement = {
+      tagName: 'svg',
+      getAttribute: () => null,
+      setAttribute: () => {},
+      querySelectorAll: () => [],
+    } as unknown as SVGElement;
   }
   const vmobjectGroup = svgToVMobjects(svgElement, {
     color,

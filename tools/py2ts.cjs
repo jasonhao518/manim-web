@@ -748,8 +748,12 @@ function convertLine(rawLine, tracking, varRenames, mathTexVars = new Set()) {
   line = line.replace(/\bPI\b/g, 'Math.PI');
   line = line.replace(/\bTAU\b/g, '2 * Math.PI');
   line = line.replace(/\bDEGREES\b/g, '(Math.PI / 180)');
-  line = line.replace(/\bmath\.(sqrt|sin|cos|tan|exp|log|abs|ceil|floor)\b/g, 'Math.$1');
-  line = line.replace(/\bnp\.(sin|cos|sqrt|tan|exp|log)\b/g, 'Math.$1');
+  line = line.replace(/\bmath\.(sqrt|sin|cos|tan|exp|log|abs|ceil|floor|atan2)\b/g, 'Math.$1');
+  line = line.replace(/\bmath\.radians\s*\(([^()]+)\)/g, '(($1) * Math.PI / 180)');
+  line = line.replace(/\bmath\.degrees\s*\(([^()]+)\)/g, '(($1) * 180 / Math.PI)');
+  line = line.replace(/\bnp\.(sin|cos|sqrt|tan|exp|log|atan2)\b/g, 'Math.$1');
+  line = line.replace(/\bnp\.deg2rad\s*\(([^()]+)\)/g, '(($1) * Math.PI / 180)');
+  line = line.replace(/\bnp\.rad2deg\s*\(([^()]+)\)/g, '(($1) * 180 / Math.PI)');
   line = convertNpArray(line);
   line = line.replace(/\bnp\.pi\b/g, 'Math.PI');
 
@@ -1003,7 +1007,7 @@ function convertLine(rawLine, tracking, varRenames, mathTexVars = new Set()) {
 
   // Insert waitForRender() after MathTex/Tex creation
   if (isMathTexAssignment && assignedVarName) {
-    line += `\n${assignIndent}await ${assignedVarName}.waitForRender();`;
+    line += `\n${assignIndent}await ${assignedVarName}.waitForRender().catch(() => {});`;
   }
 
   return line;

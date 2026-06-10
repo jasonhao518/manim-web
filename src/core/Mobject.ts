@@ -801,16 +801,16 @@ export abstract class Mobject {
   nextTo(
     target: Mobject | Vector3Tuple,
     direction: Vector3Tuple = RIGHT,
-    buff: number = 0.25,
+    buff: number | { buff?: number } = 0.25,
   ): this {
     const toPointTuple = (value: unknown): Vector3Tuple | null => {
       if (!value) return null;
 
       if (Array.isArray(value)) {
-        if (value.length < 3) return null;
+        if (value.length < 2) return null;
         const x = Number(value[0]);
         const y = Number(value[1]);
-        const z = Number(value[2]);
+        const z = Number(value[2] ?? 0);
         if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return null;
         return [x, y, z];
       }
@@ -861,8 +861,19 @@ export abstract class Mobject {
       return [sx, sy, sz];
     };
 
+    const normalizeBuff = (value: number | { buff?: number }): number => {
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        return value;
+      }
+      if (value && typeof value === 'object' && typeof value.buff === 'number') {
+        return Number.isFinite(value.buff) ? value.buff : 0.25;
+      }
+      return 0.25;
+    };
+
     const ctorName = this.constructor.name;
     const safeDirection = normalizeDirection(direction);
+    const safeBuff = normalizeBuff(buff);
     const targetObj = target as {
       getCenter?: () => Vector3Tuple;
       _getEdgeInDirection?: (direction: Vector3Tuple) => Vector3Tuple;
@@ -899,9 +910,9 @@ export abstract class Mobject {
       safeDirection[2] / len,
     ];
     const shiftBy: Vector3Tuple = [
-      tEdge[0] + n[0] * buff - sEdge[0],
-      tEdge[1] + n[1] * buff - sEdge[1],
-      tEdge[2] + n[2] * buff - sEdge[2],
+      tEdge[0] + n[0] * safeBuff - sEdge[0],
+      tEdge[1] + n[1] * safeBuff - sEdge[1],
+      tEdge[2] + n[2] * safeBuff - sEdge[2],
     ];
 
     const beforeCenter = this.getCenter();
@@ -925,7 +936,7 @@ export abstract class Mobject {
         thisId: this.id,
         ctorName,
         labelName,
-        buff,
+        buff: safeBuff,
         direction,
         safeDirection,
         normalizedDirection: n,
