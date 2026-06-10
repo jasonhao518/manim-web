@@ -916,22 +916,26 @@ function convertLine(rawLine, tracking, varRenames, mathTexVars = new Set()) {
   // Vector additions commonly used in Manim snippets.
   // point + [dx, dy, dz] -> addVec(point, [dx, dy, dz])
   // point + scaleVec(...) -> addVec(point, scaleVec(...))
-  line = line.replace(/\b([A-Za-z_$][\w$]*)\s*\+\s*(\[[^\]]+\]|scaleVec\([^\n]+\))/g, (_, lhs, rhs) => {
+  line = line.replace(/\b([A-Za-z_$][\w$]*)\s*\+\s*(\[[^\]]+\]|scaleVec\([^()]*\))/g, (_, lhs, rhs) => {
     tracking.usedUtilities.add('addVec');
     return `addVec(${lhs}, ${rhs})`;
   });
   // scaleVec(...) + scaleVec(...)
-  line = line.replace(/(scaleVec\([^\n]+\))\s*\+\s*(scaleVec\([^\n]+\))/g, (_, lhs, rhs) => {
+  line = line.replace(/(scaleVec\([^()]*\))\s*\+\s*(scaleVec\([^()]*\))/g, (_, lhs, rhs) => {
     tracking.usedUtilities.add('addVec');
     return `addVec(${lhs}, ${rhs})`;
   });
   // Support chained additions after first rewrite: addVec(...) + scaleVec(...)
-  line = line.replace(/(addVec\([^\n]+\))\s*\+\s*(\[[^\]]+\]|scaleVec\([^\n]+\))/g, (_, lhs, rhs) => {
+  line = line.replace(/(addVec\([^)]*\))\s*\+\s*(\[[^\]]+\]|scaleVec\([^()]*\))/g, (_, lhs, rhs) => {
     tracking.usedUtilities.add('addVec');
     return `addVec(${lhs}, ${rhs})`;
   });
   // addVec(...) + scaleVec(...) where addVec has nested parens in args
-  line = line.replace(/(addVec\([^\n]+\))\s*\+\s*(scaleVec\([^\n]+\))/g, (_, lhs, rhs) => {
+  line = line.replace(/(addVec\([^)]*\))\s*\+\s*(scaleVec\([^()]*\))/g, (_, lhs, rhs) => {
+    tracking.usedUtilities.add('addVec');
+    return `addVec(${lhs}, ${rhs})`;
+  });
+  line = line.replace(/(addVec\([^\n]+?\))\s*\+\s*(scaleVec\([^()]*\))/g, (_, lhs, rhs) => {
     tracking.usedUtilities.add('addVec');
     return `addVec(${lhs}, ${rhs})`;
   });
