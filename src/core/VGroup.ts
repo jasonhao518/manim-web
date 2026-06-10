@@ -15,12 +15,16 @@ export class VGroup extends VMobject {
   /**
    * Python-Manim compatibility: access a child by index.
    */
-  getPart(index: number): Mobject | undefined {
+  getPart(index: number): Mobject {
+    if (this.children.length === 0) {
+      return this;
+    }
     const i = Math.trunc(index);
     if (i < 0) {
-      return this.children[this.children.length + i];
+      const fromEnd = this.children.length + i;
+      return this.children[Math.max(0, fromEnd)] ?? this.children[0];
     }
-    return this.children[i];
+    return this.children[Math.min(i, this.children.length - 1)] ?? this.children[0];
   }
 
   /**

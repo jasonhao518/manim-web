@@ -869,13 +869,37 @@ function convertLine(rawLine, tracking, varRenames, mathTexVars = new Set()) {
 
   // Generic scalar * vector-expression patterns frequently used in geometry scripts.
   // e.g. k * [x, y, z], k * subVec(A, B)
-  line = line.replace(/([A-Za-z_$][\w$.]*|\d+(?:\.\d+)?)\s*\*\s*(\[[^\]]+\]|subVec\([^)]*\)|addVec\([^)]*\))/g, (_, scalar, vecExpr) => {
+  line = line.replace(/(\([^)]*\)|[A-Za-z_$][\w$.]*|\d+(?:\.\d+)?)\s*\*\s*(\[[^\]]+\]|subVec\([^)]*\)|addVec\([^)]*\))/g, (_, scalar, vecExpr) => {
     tracking.usedUtilities.add('scaleVec');
     return `scaleVec(${scalar}, ${vecExpr})`;
   });
-  line = line.replace(/(\[[^\]]+\]|subVec\([^)]*\)|addVec\([^)]*\))\s*\*\s*([A-Za-z_$][\w$.]*|\d+(?:\.\d+)?)/g, (_, vecExpr, scalar) => {
+  line = line.replace(/(\[[^\]]+\]|subVec\([^)]*\)|addVec\([^)]*\))\s*\*\s*(\([^)]*\)|[A-Za-z_$][\w$.]*|\d+(?:\.\d+)?)/g, (_, vecExpr, scalar) => {
     tracking.usedUtilities.add('scaleVec');
     return `scaleVec(${scalar}, ${vecExpr})`;
+  });
+
+  // point + scalar * vectorExpr -> addVec(point, scaleVec(scalar, vectorExpr))
+  line = line.replace(/\b([A-Za-z_$][\w$]*)\s*\+\s*(\([^)]*\)|[A-Za-z_$][\w$.]*|\d+(?:\.\d+)?)\s*\*\s*(\(?\s*subVec\([^)]*\)\s*\)?|\[[^\]]+\])/g, (_, point, scalar, vecExpr) => {
+    tracking.usedUtilities.add('addVec');
+    tracking.usedUtilities.add('scaleVec');
+    return `addVec(${point}, scaleVec(${scalar}, ${vecExpr}))`;
+  });
+  line = line.replace(/\b([A-Za-z_$][\w$]*)\s*\+\s*(\([^)]*\)|[A-Za-z_$][\w$.]*|\d+(?:\.\d+)?)\s*\*\s*\((subVec\([^)]*\))\)/g, (_, point, scalar, vecExpr) => {
+    tracking.usedUtilities.add('addVec');
+    tracking.usedUtilities.add('scaleVec');
+    return `addVec(${point}, scaleVec(${scalar}, ${vecExpr}))`;
+  });
+  line = line.replace(/\b([A-Za-z_$][\w$]*)\s*\+\s*([^;]+?)\s*\*\s*\(\s*subVec\(([^)]*)\)\s*\)/g, (_, point, scalar, subVecArgs) => {
+    tracking.usedUtilities.add('addVec');
+    tracking.usedUtilities.add('scaleVec');
+    tracking.usedUtilities.add('subVec');
+    return `addVec(${point}, scaleVec(${scalar.trim()}, subVec(${subVecArgs})))`;
+  });
+  line = line.replace(/\b([A-Za-z_$][\w$]*)\s*\+\s*\(([^)]+)\)\s*\*\s*\(subVec\(([^)]+)\)\)/g, (_, point, scalar, subVecArgs) => {
+    tracking.usedUtilities.add('addVec');
+    tracking.usedUtilities.add('scaleVec');
+    tracking.usedUtilities.add('subVec');
+    return `addVec(${point}, scaleVec((${scalar}), subVec(${subVecArgs})))`;
   });
 
   // Heuristic point-vector subtraction/addition for common point names (A, B, A0, P1...).
@@ -892,25 +916,29 @@ function convertLine(rawLine, tracking, varRenames, mathTexVars = new Set()) {
   // Vector additions commonly used in Manim snippets.
   // point + [dx, dy, dz] -> addVec(point, [dx, dy, dz])
   // point + scaleVec(...) -> addVec(point, scaleVec(...))
-  line = line.replace(/\b([A-Za-z_$][\w$]*)\s*\+\s*(\[[^\]]+\]|scaleVec\([^)]*\))/g, (_, lhs, rhs) => {
+  line = line.replace(/\b([A-Za-z_$][\w$]*)\s*\+\s*(\[[^\]]+\]|scaleVec\([^\n]+\))/g, (_, lhs, rhs) => {
     tracking.usedUtilities.add('addVec');
     return `addVec(${lhs}, ${rhs})`;
   });
   // scaleVec(...) + scaleVec(...)
-  line = line.replace(/(scaleVec\([^)]*\))\s*\+\s*(scaleVec\([^)]*\))/g, (_, lhs, rhs) => {
+  line = line.replace(/(scaleVec\([^\n]+\))\s*\+\s*(scaleVec\([^\n]+\))/g, (_, lhs, rhs) => {
     tracking.usedUtilities.add('addVec');
     return `addVec(${lhs}, ${rhs})`;
   });
   // Support chained additions after first rewrite: addVec(...) + scaleVec(...)
-  line = line.replace(/(addVec\([^)]*\))\s*\+\s*(\[[^\]]+\]|scaleVec\([^)]*\))/g, (_, lhs, rhs) => {
+  line = line.replace(/(addVec\([^\n]+\))\s*\+\s*(\[[^\]]+\]|scaleVec\([^\n]+\))/g, (_, lhs, rhs) => {
     tracking.usedUtilities.add('addVec');
     return `addVec(${lhs}, ${rhs})`;
   });
   // addVec(...) + scaleVec(...) where addVec has nested parens in args
-  line = line.replace(/(addVec\([^\n]+?\))\s*\+\s*(scaleVec\([^)]*\))/g, (_, lhs, rhs) => {
+  line = line.replace(/(addVec\([^\n]+\))\s*\+\s*(scaleVec\([^\n]+\))/g, (_, lhs, rhs) => {
     tracking.usedUtilities.add('addVec');
     return `addVec(${lhs}, ${rhs})`;
   });
+
+  // Clean up malformed trig-degree conversions occasionally produced by nested rewrites.
+  line = line.replace(/Math\.(sin|cos|tan)\(\(\(([^)]+)\)\)\s*\*\s*Math\.PI\s*\/\s*180\)\)/g, 'Math.$1((($2) * Math.PI / 180))');
+  line = line.replace(/Math\.(sin|cos|tan)\(\(\(([^)]+)\)\s*\*\s*Math\.PI\s*\/\s*180\)\)/g, 'Math.$1((($2) * Math.PI / 180))');
 
   // Normalize common British spellings used in Python Manim snippets.
   line = line.replace(/\bGREY_([A-E])\b/g, 'GRAY_$1');
@@ -1085,6 +1113,14 @@ function convertLine(rawLine, tracking, varRenames, mathTexVars = new Set()) {
   for (const mtVar of mathTexVars) {
     line = line.replace(new RegExp(`\\b${mtVar}\\[\\s*(\\d+)\\s*\\]`, 'g'), `${mtVar}.getPart($1)`);
   }
+
+  // Late normalization: point + (scalar) * (subVec(...))
+  line = line.replace(/\b([A-Za-z_$][\w$]*)\s*\+\s*\(([^)]+)\)\s*\*\s*\(subVec\(([^)]+)\)\)/g, (_, point, scalar, subVecArgs) => {
+    tracking.usedUtilities.add('addVec');
+    tracking.usedUtilities.add('scaleVec');
+    tracking.usedUtilities.add('subVec');
+    return `addVec(${point}, scaleVec((${scalar}), subVec(${subVecArgs})))`;
+  });
 
   // scene.play in ManimWeb accepts only animations; drop trailing timing options
   // emitted from Python kwargs conversion to avoid passing plain objects as animations.

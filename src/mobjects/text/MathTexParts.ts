@@ -98,8 +98,16 @@ export class MathTexPart extends VGroup {
   /**
    * Get a specific part by index
    */
-  getPart(index: number): MathTexImage | undefined {
-    return this._parts[index];
+  override getPart(index: number): MathTexImage {
+    if (this._parts.length === 0) {
+      return super.getPart(0) as MathTexImage;
+    }
+    const i = Math.trunc(index);
+    if (i < 0) {
+      const fromEnd = this._parts.length + i;
+      return this._parts[Math.max(0, fromEnd)] ?? this._parts[0];
+    }
+    return this._parts[Math.min(i, this._parts.length - 1)] ?? this._parts[0];
   }
 
   /**
