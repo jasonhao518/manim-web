@@ -132,11 +132,19 @@ export class Mobject1D extends PMobject {
     return this._localToWorld(this._start);
   }
 
+  getStartPoint(): Vector3Tuple {
+    return this.getStart();
+  }
+
   /**
    * Get the end point
    */
   getEnd(): Vector3Tuple {
     return this._localToWorld(this._end);
+  }
+
+  getEndPoint(): Vector3Tuple {
+    return this.getEnd();
   }
 
   /**

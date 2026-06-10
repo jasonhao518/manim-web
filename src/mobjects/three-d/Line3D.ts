@@ -129,6 +129,10 @@ export class Line3D extends Mobject3D {
     return [...this._start];
   }
 
+  getStartPoint(): Vector3Tuple {
+    return this.getStart();
+  }
+
   setStart(point: Vector3Tuple): this {
     this._start = [...point];
     this._updateGeometry();
@@ -137,6 +141,10 @@ export class Line3D extends Mobject3D {
 
   getEnd(): Vector3Tuple {
     return [...this._end];
+  }
+
+  getEndPoint(): Vector3Tuple {
+    return this.getEnd();
   }
 
   setEnd(point: Vector3Tuple): this {

@@ -85,6 +85,11 @@ export class Line extends VMobject {
     return [v.x, v.y, v.z];
   }
 
+  // Backward-compat alias used by some generated/transpiled scenes.
+  getStartPoint(): Vector3Tuple {
+    return this.getStart();
+  }
+
   /**
    * Set the start point
    */
@@ -104,6 +109,11 @@ export class Line extends VMobject {
     const worldMatrix = this._worldMatrix();
     const v = new THREE.Vector3(localPt[0], localPt[1], localPt[2]).applyMatrix4(worldMatrix);
     return [v.x, v.y, v.z];
+  }
+
+  // Backward-compat alias used by some generated/transpiled scenes.
+  getEndPoint(): Vector3Tuple {
+    return this.getEnd();
   }
 
   /**

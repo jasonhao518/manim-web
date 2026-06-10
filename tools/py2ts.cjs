@@ -776,9 +776,14 @@ function convertLine(rawLine, tracking, varRenames, mathTexVars = new Set()) {
   });
 
   // Python slice notation: arr[:N] → arr.slice(0, N)
-  line = line.replace(/(\w+(?:\.\w+)*)\s*\[\s*:(\d+)\s*\]/g, '$1.slice(0, $2)');
+  line = line.replace(/([^\s\[]+)\s*\[\s*:(\d+)\s*\]/g, '$1.slice(0, $2)');
   // Python slice notation: arr[N:] → arr.slice(N)
-  line = line.replace(/(\w+(?:\.\w+)*)\s*\[(\d+)\s*:\s*\]/g, '$1.slice($2)');
+  line = line.replace(/([^\s\[]+)\s*\[(\d+)\s*:\s*\]/g, '$1.slice($2)');
+  // Python slice notation: arr[M:N] → arr.slice(M, N)
+  line = line.replace(/([^\s\[]+)\s*\[(\d+)\s*:\s*(\d+)\s*\]/g, '$1.slice($2, $3)');
+
+  // Python map(fn, iterable) → iterable.map(fn)
+  line = line.replace(/\bmap\(\s*([^,]+?)\s*,\s*([^\)]+?)\s*\)/g, '($2).map($1)');
 
   // func(array).argmin() → array.reduce((mi, _, i, a) => func(a[i]) < func(a[mi]) ? i : mi, 0)
   line = line.replace(/(\w+)\((\w+)\)\.argmin\(\)/g,
@@ -986,6 +991,19 @@ function convertLine(rawLine, tracking, varRenames, mathTexVars = new Set()) {
         isMathTexAssignment = true;
       }
     }
+  }
+
+  // Tuple/list unpack assignment: a, b, c = expr  -> const [a, b, c] = expr
+  const unpackMatch = line.match(/^(\s*)([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w+)+)\s*=\s*(.+);?$/);
+  if (unpackMatch && !/^\s*(const|let|var)\b/.test(line)) {
+    const indent = unpackMatch[1];
+    const vars = unpackMatch[2]
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean)
+      .join(', ');
+    const rhs = unpackMatch[3].trim().replace(/;$/, '');
+    line = `${indent}const [${vars}] = ${rhs};`;
   }
 
   // Convert MathTex variable indexing: text[N] → text.getPart(N)
