@@ -81,6 +81,7 @@
     "@rolldown/binding-darwin-x64": "^1.1.0",
     "@types/earcut": "^3.0.0",
     "@types/katex": "^0.16.8",
+    "@types/node": "^20.17.0",
     "@types/react": "^19.2.13",
     "@types/three": "^0.184.0",
     "@typia/unplugin": "^12.1.1",
